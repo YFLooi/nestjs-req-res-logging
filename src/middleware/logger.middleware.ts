@@ -63,8 +63,6 @@ const getResponseLog = (res: Response) => {
     return rawResponse.apply(res, resArgs);
   };
 
-  console.log(`chunks: `, Buffer.from(chunkBuffers).toJSON());
-
   console.log(`Done writing, beginning res.end`);
   res.end = (...chunk) => {
     const resArgs = [];
