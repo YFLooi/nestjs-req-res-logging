@@ -93,7 +93,7 @@ const getResponseLog = (res: Response) => {
       },
     };
 
-    console.log('responseLog', responseLog);
+    console.log('res: ', responseLog);
 
     // res.end() is satisfied after passing in restArgs as params
     // Doing so creates 'end' event to indicate that the entire body has been received.
