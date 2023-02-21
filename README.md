@@ -45,6 +45,8 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+Make requests to `http://localhost:3000`. Ex: `POST to http://localhost:3000/`
+
 ## Test
 
 ```bash

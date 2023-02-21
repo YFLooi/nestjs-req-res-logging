@@ -1,9 +1,5 @@
-// import * as httpContext from 'express-http-context';
-// import * as uuidV4 from 'uuid/v4';
-import { Injectable, NestMiddleware, RequestMethod } from '@nestjs/common';
+import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
-import { RouteInfo } from '@nestjs/common/interfaces';
-import { request } from 'http';
 
 @Injectable()
 export class LoggerMiddleware implements NestMiddleware {
@@ -28,21 +24,24 @@ const getResponseLog = (res: Response) => {
   const rawResponse = res.write;
   const rawResponseEnd = res.end;
 
-  const chunkBuffers = [];
+  let chunkBuffers = [];
 
   // New chunk passed in as Buffer each time write() is called by stream
   // Take chunks as a rest parameter since it is an array. This allows applying Array methods directly (ref MDN)
   // res.write below is in object mode for write to avoid needing encoding arg (https://nodejs.org/api/stream.html#writable_writevchunks-callback)
-  console.log(`Beginning res.write`);
+
+  console.log(`======>> Beginning res.write`);
   res.write = (...chunks) => {
+    // Not able to console.log in res.write: It is a writable stream
     const resArgs = [];
     for (let i = 0; i < chunks.length; i++) {
-      resArgs[i] = chunks[i];
+      // undefined values would break Buffer.concat(resArgs)
+      if (chunks[i]) resArgs[i] = Buffer.from(chunks[i]);
 
       // This handling comes in when buffer is full, hence rawResponse === false after rawResponse.apply() below
       // Ref: Example under https://nodejs.org/api/stream.html#class-streamwritable
       // Callback (res.write) resumes write stream
-      if (!resArgs[i]) {
+      if (!chunks[i]) {
         res.once('drain', res.write);
 
         // Resume from last falsy iteration
@@ -50,10 +49,9 @@ const getResponseLog = (res: Response) => {
       }
     }
 
-    // Copy buffer to new buffer instance then push into chunks[]
-    // resArgs[0] contains the response body
-    if (resArgs[0]) {
-      chunkBuffers.push(Buffer.from(resArgs[0]));
+    // Join together all collected Buffers in 1 array
+    if (Buffer.concat(resArgs)?.length) {
+      chunkBuffers = [...chunkBuffers, ...resArgs];
     }
 
     // res.write shuold return true if the internal buffer is less than the default highWaterMark. If false is returned, further attempts to write data to the stream should stop until the 'drain' event is emitted.
@@ -63,20 +61,32 @@ const getResponseLog = (res: Response) => {
     return rawResponse.apply(res, resArgs);
   };
 
-  console.log(`Done writing, beginning res.end`);
-  res.end = (...chunk) => {
+  console.log(`========> Done writing, beginning res.end`);
+  res.end = (...chunks) => {
+    // Will log nothing: res.write is a writable stream
+    console.log(
+      `========> Chunks gathered during res.write: ${typeof chunkBuffers}`,
+      Buffer.from(chunkBuffers).toJSON(),
+    );
+    console.log(
+      `========> Chunks to handle during res.end: ${typeof chunks}`,
+      Buffer.from(chunks).toJSON(),
+    );
+
     const resArgs = [];
-    for (let i = 0; i < chunk.length; i++) {
-      resArgs[i] = chunk[i];
+    for (let i = 0; i < chunks.length; i++) {
+      console.log(`res.end chunk ${i} content: ${typeof chunks[i]}`, chunks[i]);
+
+      // undefined values would break Buffer.concat(resArgs)
+      if (chunks[i]) resArgs[i] = Buffer.from(chunks[i]);
     }
 
-    // Copy buffer to new buffer instance then push into chunks[]
     // resArgs[0] contains the response body
-    if (resArgs[0]) {
-      chunkBuffers.push(Buffer.from(resArgs[0]));
+    if (Buffer.concat(resArgs)?.length) {
+      chunkBuffers = [...chunkBuffers, ...resArgs];
     }
 
-    // Encode buffer as utf8 JSON string
+    // Join together all collected Buffers then encode as utf8 string
     const body = Buffer.concat(chunkBuffers).toString('utf8');
 
     // Set custom header for response
